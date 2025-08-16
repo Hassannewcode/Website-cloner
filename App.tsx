@@ -5,10 +5,10 @@ import { Header } from './components/Header';
 import { FileExplorer } from './components/FileExplorer';
 import { PreviewWindow } from './components/PreviewWindow';
 import { CodeEditor } from './components/CodeEditor';
-import { AgentLog } from './components/AgentLog';
+import { RightPanel } from './components/RightPanel';
 import { ScreenshotModal } from './components/ScreenshotModal';
 import { AuthPrompt } from './components/AuthPrompt';
-import { CloningState, FileSystem, AgentLogEntry, LogType } from './types';
+import { CloningState, FileSystem, AgentLogEntry, LogType, FileSystemNode } from './types';
 
 const API_KEY = process.env.API_KEY;
 if (!API_KEY) {
@@ -25,6 +25,49 @@ const fileToBase64 = (file: File): Promise<string> => {
     });
 };
 
+const consoleCaptureScript = `
+<script>
+  const originalError = console.error;
+  console.error = function(...args) {
+    const message = args.map(arg => {
+        try {
+            if (arg instanceof Error) return arg.stack;
+            if (typeof arg === 'object' && arg !== null) return JSON.stringify(arg);
+            return String(arg);
+        } catch (e) {
+            return 'Unserializable object';
+        }
+    }).join(' ');
+    window.parent.postMessage({ type: 'console-error', message }, '*');
+    originalError.apply(console, args);
+  };
+  window.addEventListener('error', function(event) {
+    window.parent.postMessage({ type: 'console-error', message: event.message + ' at ' + event.filename + ':' + event.lineno }, '*');
+  });
+  window.addEventListener('unhandledrejection', event => {
+    const reason = event.reason instanceof Error ? event.reason.stack : String(event.reason);
+    window.parent.postMessage({ type: 'console-error', message: 'Unhandled promise rejection: ' + reason }, '*');
+  });
+</script>
+`;
+
+const getFileSystemAsText = (fs: FileSystem): string[] => {
+    const files: string[] = [];
+    const traverse = (node: FileSystem, path: string) => {
+        for (const [name, childNode] of Object.entries(node)) {
+            const currentPath = path ? `${path}/${name}` : name;
+            if (childNode.type === 'file') {
+                files.push(`--- File: ${currentPath} ---\n\`\`\`\n${childNode.content}\n\`\`\``);
+            } else {
+                traverse(childNode.children, currentPath);
+            }
+        }
+    };
+    traverse(fs, '');
+    return files;
+};
+
+
 const App: React.FC = () => {
     const [cloningState, setCloningState] = useState<CloningState>(CloningState.IDLE);
     const [agentLogs, setAgentLogs] = useState<AgentLogEntry[]>([]);
@@ -36,6 +79,10 @@ const App: React.FC = () => {
     const [authUrl, setAuthUrl] = useState('');
     const [cloningQueue, setCloningQueue] = useState<{ url: string; screenshot?: File }[]>([]);
     const [visitedUrls, setVisitedUrls] = useState<Set<string>>(new Set());
+    const [consoleErrors, setConsoleErrors] = useState<string[]>([]);
+    const [fixAttempts, setFixAttempts] = useState(0);
+
+    const MAX_FIX_ATTEMPTS = 3;
 
     const addLog = useCallback((message: string, type: LogType = LogType.INFO) => {
         setAgentLogs(prev => [...prev, { message, type, timestamp: new Date() }]);
@@ -55,7 +102,7 @@ const App: React.FC = () => {
     };
     
     const handleInitiateCloning = (url: string, useScreenshot: boolean) => {
-        if (!url || cloningState !== CloningState.IDLE && cloningState !== CloningState.COMPLETED && cloningState !== CloningState.ERROR) return;
+        if (!url || ![CloningState.IDLE, CloningState.COMPLETED, CloningState.ERROR].includes(cloningState)) return;
 
         setCloningState(CloningState.CLONING);
         setAgentLogs([]);
@@ -63,6 +110,8 @@ const App: React.FC = () => {
         setActiveFile(null);
         setMainHtmlContent(null);
         setVisitedUrls(new Set());
+        setConsoleErrors([]);
+        setFixAttempts(0);
         addLog("Initializing Full-Stack Agentic Cloner v5.0...", LogType.SYSTEM);
         
         setUrlToClone(url);
@@ -109,7 +158,6 @@ const App: React.FC = () => {
         const htmlContent = await fetchResponse.text();
         addLog("Successfully fetched page source.", LogType.SUCCESS);
         
-        // Asset Discovery and Fetching
         const assetUrls = Array.from(htmlContent.matchAll(/<link[^>]+href="([^"]+\.css)"|<script[^>]+src="([^"]+\.js)"/g))
             .map(match => match[1] || match[2])
             .filter(Boolean)
@@ -238,7 +286,9 @@ Respond with a single JSON object matching the provided schema. Do not add any e
              addLog(`Reconstructing file system for ${url}.`, LogType.INFO);
             for (const file of allFiles) {
                 addFileToSystem(newFileSystem, file.path, file.content);
-                if (file.path.endsWith('.html') && mainHtmlContent === null) setMainHtmlContent(file.content);
+                if (file.path.endsWith('.html') && mainHtmlContent === null) {
+                    setMainHtmlContent(consoleCaptureScript + file.content);
+                }
                 addLog(`Created/Updated file: ${file.path}`, LogType.INFO);
             }
         }
@@ -254,6 +304,99 @@ Respond with a single JSON object matching the provided schema. Do not add any e
         return { newFileSystem, nextUrl, stop: false };
     };
     
+    const handleAutoFix = async (errors: string[]) => {
+        setCloningState(CloningState.FIXING);
+        setFixAttempts(prev => prev + 1);
+        setConsoleErrors([]); // Clear errors for the next run
+    
+        addLog(`Analyzing ${errors.length} console error(s)...`, LogType.DEBUG);
+    
+        const prompt = `
+    You are an expert AI developer debugging a web application. You will be given the full source code of the application and a list of console errors from the browser's preview.
+    
+    **Task:**
+    1.  Analyze the provided console errors.
+    2.  Analyze the full application source code to find the root cause of the errors.
+    3.  Fix the bug(s) by modifying the necessary files. Provide the FULL, complete content for any file you change. Do not provide diffs or partial code.
+    4.  Provide a brief analysis of the problem and your solution.
+    
+    **Input:**
+    *   **Console Errors:**
+        \`\`\`
+        ${errors.join('\n')}
+        \`\`\`
+    *   **Source Code:**
+        ${getFileSystemAsText(fileSystem).join('\n\n')}
+    
+    **Output:**
+    Respond with a single JSON object matching the provided schema. Do not add any explanatory text outside the JSON structure.`;
+    
+        try {
+            const response = await ai.models.generateContent({
+                model: 'gemini-2.5-flash',
+                contents: prompt,
+                config: {
+                    responseMimeType: 'application/json',
+                    responseSchema: {
+                        type: Type.OBJECT,
+                        properties: {
+                            analysis: { type: Type.STRING, description: "A brief explanation of the error and your fix." },
+                            filesToUpdate: {
+                                type: Type.ARRAY,
+                                items: {
+                                    type: Type.OBJECT,
+                                    properties: {
+                                        path: { type: Type.STRING, description: "The full path of the file to update." },
+                                        content: { type: Type.STRING, description: "The full, corrected content of the file." }
+                                    },
+                                    required: ["path", "content"],
+                                },
+                            },
+                        },
+                        required: ["analysis", "filesToUpdate"],
+                    },
+                },
+            });
+    
+            const result = JSON.parse(response.text);
+            addLog(`AI Analysis: ${result.analysis}`, LogType.SYSTEM);
+    
+            if (!result.filesToUpdate || result.filesToUpdate.length === 0) {
+                addLog("AI analyzed the error but did not provide a file to fix. Stopping auto-fix.", LogType.WARN);
+                setCloningState(CloningState.ERROR);
+                return;
+            }
+    
+            let updatedFileSystem = { ...fileSystem };
+            let htmlUpdated = false;
+    
+            for (const file of result.filesToUpdate) {
+                addLog(`AI is applying fix to: ${file.path}`, LogType.DEBUG);
+                addFileToSystem(updatedFileSystem, file.path, file.content);
+                if (file.path.endsWith('.html')) { // A crude check to see if the main HTML was updated
+                    setMainHtmlContent(consoleCaptureScript + file.content);
+                    htmlUpdated = true;
+                }
+            }
+            
+            setFileSystem(updatedFileSystem);
+            if (!htmlUpdated) { // Force a re-render of iframe if HTML was not the file changed
+                setMainHtmlContent(prev => prev ? prev + ' ' : null);
+                setTimeout(() => setMainHtmlContent(prev => prev?.trim() ?? null), 0);
+            }
+    
+            addLog("AI proposed a fix. Applied changes and reloading preview.", LogType.SUCCESS);
+            setCloningState(CloningState.COMPLETED);
+    
+        } catch (error) {
+            console.error("Auto-fix Error:", error);
+            const errorMessage = error instanceof Error ? error.message : "An unknown error occurred during auto-fix.";
+            addLog(`Failed to apply fix: ${errorMessage}`, LogType.ERROR);
+            setCloningState(CloningState.ERROR);
+        }
+    };
+    
+
     useEffect(() => {
         const processQueue = async () => {
             if (cloningState === CloningState.CLONING && cloningQueue.length > 0) {
@@ -278,7 +421,7 @@ Respond with a single JSON object matching the provided schema. Do not add any e
                     }
                     
                     if (newQueue.length === 0 || visitedUrls.size >= 5) {
-                        addLog(`Cloning process complete. Cloned ${visitedUrls.size + 1} page(s).`, LogType.SUCCESS);
+                        addLog(`Cloning process complete. Cloned ${visitedUrls.size + 1} page(s). Now monitoring for errors.`, LogType.SUCCESS);
                         setCloningState(CloningState.COMPLETED);
                     }
                     setCloningQueue(newQueue);
@@ -295,10 +438,36 @@ Respond with a single JSON object matching the provided schema. Do not add any e
         processQueue();
     }, [cloningState, cloningQueue]);
 
+    useEffect(() => {
+        const handleMessage = (event: MessageEvent) => {
+            if (event.data?.type === 'console-error') {
+                setConsoleErrors(prev => {
+                    const errorExists = prev.some(e => e.includes(event.data.message));
+                    return errorExists ? prev : [...prev, event.data.message];
+                });
+            }
+        };
+        window.addEventListener('message', handleMessage);
+        return () => window.removeEventListener('message', handleMessage);
+    }, []);
+
+    useEffect(() => {
+        if (consoleErrors.length > 0 &&
+            (cloningState === CloningState.COMPLETED || cloningState === CloningState.ERROR) &&
+            fixAttempts < MAX_FIX_ATTEMPTS) {
+            
+            addLog(`Detected ${consoleErrors.length} console error(s). Attempting to auto-fix... (Attempt ${fixAttempts + 1}/${MAX_FIX_ATTEMPTS})`, LogType.SYSTEM);
+            handleAutoFix(consoleErrors);
+        } else if (consoleErrors.length > 0 && fixAttempts >= MAX_FIX_ATTEMPTS && cloningState !== CloningState.FIXING) {
+            addLog(`Max auto-fix attempts reached. Please fix the remaining errors manually.`, LogType.WARN);
+            setCloningState(CloningState.ERROR); // Final state is error
+        }
+    }, [consoleErrors, cloningState, fixAttempts]);
+
 
     return (
         <div className="h-screen w-screen flex flex-col bg-primary font-sans">
-            <Header onInitiateCloning={handleInitiateCloning} isLoading={cloningState === CloningState.CLONING} />
+            <Header onInitiateCloning={handleInitiateCloning} isLoading={cloningState === CloningState.CLONING || cloningState === CloningState.FIXING} />
             <main className="flex-grow grid grid-cols-12 gap-4 p-4 overflow-hidden">
                 <div className="col-span-2 bg-secondary rounded-lg border border-border-color overflow-y-auto">
                     <FileExplorer fileSystem={fileSystem} onFileSelect={setActiveFile} />
@@ -307,7 +476,11 @@ Respond with a single JSON object matching the provided schema. Do not add any e
                     {activeFile ? <CodeEditor file={activeFile} /> : <PreviewWindow htmlContent={mainHtmlContent} />}
                 </div>
                 <div className="col-span-4 bg-secondary rounded-lg border border-border-color flex flex-col">
-                    <AgentLog logs={agentLogs} />
+                    <RightPanel 
+                        logs={agentLogs} 
+                        consoleErrors={consoleErrors} 
+                        isFixing={cloningState === CloningState.FIXING}
+                    />
                 </div>
             </main>
             {isScreenshotModalOpen && (

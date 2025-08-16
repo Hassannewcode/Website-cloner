@@ -3,6 +3,7 @@ export enum CloningState {
     IDLE = 'IDLE',
     CLONING = 'CLONING',
     AWAITING_USER_INPUT = 'AWAITING_USER_INPUT',
+    FIXING = 'FIXING',
     COMPLETED = 'COMPLETED',
     ERROR = 'ERROR',
 }
@@ -29,6 +30,7 @@ export enum LogType {
     ERROR = 'ERROR',
     SUCCESS = 'SUCCESS',
     SYSTEM = 'SYSTEM',
+    DEBUG = 'DEBUG',
 }
 
 export interface AgentLogEntry {
