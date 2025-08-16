@@ -1,0 +1,5 @@
+{
+  "name": "AI Agentic Web Cloner",
+  "description": "A sophisticated web application that simulates an AI agent cloning websites and applications with an agentic workflow. It provides a live preview, file explorer, code editor, and an interactive agent log to visualize the entire cloning process, including handling authentication prompts.",
+  "requestFramePermissions": []
+}
