@@ -7,14 +7,35 @@ interface HeaderProps {
 }
 
 export const Header: React.FC<HeaderProps> = ({ onInitiateCloning, isLoading }) => {
-    const [url, setUrl] = useState<string>('https://example.com');
+    const [url, setUrl] = useState<string>('');
+    const [urlError, setUrlError] = useState<string | null>(null);
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
 
+    const handleValidation = () => {
+        if (!url.trim()) {
+            setUrlError('Please enter a URL.');
+            return false;
+        }
+        setUrlError(null);
+        return true;
+    };
+
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        onInitiateCloning(url, false); // Default action: HTML-only
+        if (handleValidation()) {
+            onInitiateCloning(url, false);
+        }
     };
+    
+    const handleScreenshotClone = (e: React.MouseEvent) => {
+        e.preventDefault();
+        setIsDropdownOpen(false);
+        if (handleValidation()) {
+            onInitiateCloning(url, true);
+        }
+    };
+
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
@@ -35,15 +56,28 @@ export const Header: React.FC<HeaderProps> = ({ onInitiateCloning, isLoading }) 
                 <h1 className="text-xl font-semibold text-text-primary">Agentic Web Cloner</h1>
             </div>
             <form onSubmit={handleSubmit} className="flex items-center gap-2 flex-grow max-w-2xl">
-                <input
-                    type="url"
-                    value={url}
-                    onChange={(e) => setUrl(e.target.value)}
-                    placeholder="https://example.com"
-                    className="w-full bg-primary border border-border-color rounded-md px-3 py-1.5 text-text-primary focus:outline-none focus:ring-2 focus:ring-accent font-mono text-sm"
-                    required
-                    disabled={isLoading}
-                />
+                <div className="relative flex-grow">
+                    <input
+                        type="text"
+                        value={url}
+                        onChange={(e) => {
+                            setUrl(e.target.value)
+                            if (urlError) setUrlError(null);
+                        }}
+                        placeholder="google.com"
+                        className="w-full bg-primary border border-border-color rounded-md px-3 py-1.5 text-text-primary focus:outline-none focus:ring-2 focus:ring-accent font-mono text-sm"
+                        disabled={isLoading}
+                    />
+                    {urlError && (
+                        <div className="absolute left-4 top-full mt-2 w-max bg-white rounded-md shadow-lg py-2 px-3 z-20 flex items-center gap-2 text-sm text-gray-700 font-sans animate-fade-in-down">
+                            <div className="absolute -top-[7px] left-8 w-0 h-0 border-l-[8px] border-l-transparent border-r-[8px] border-r-transparent border-b-[8px] border-b-white"></div>
+                            <div className="flex items-center justify-center h-5 w-5 bg-orange-400 rounded">
+                                <span className="text-white font-bold text-sm select-none">!</span>
+                            </div>
+                            <span className="text-gray-800 font-medium">{urlError}</span>
+                        </div>
+                    )}
+                </div>
                 
                 <div className="relative inline-flex rounded-md shadow-sm">
                     <button
@@ -79,11 +113,7 @@ export const Header: React.FC<HeaderProps> = ({ onInitiateCloning, isLoading }) 
                                 <div className="py-1">
                                     <a
                                         href="#"
-                                        onClick={(e) => {
-                                            e.preventDefault();
-                                            onInitiateCloning(url, true);
-                                            setIsDropdownOpen(false);
-                                        }}
+                                        onClick={handleScreenshotClone}
                                         className="block px-4 py-2 text-sm text-text-primary hover:bg-primary"
                                     >
                                         Clone with Screenshot
