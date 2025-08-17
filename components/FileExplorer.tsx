@@ -1,19 +1,21 @@
 
 import React, { useState } from 'react';
-import { FileSystem, FileSystemNode } from '../types';
+import { FileSystem } from '../types';
 import { FolderIcon } from './icons/FolderIcon';
 import { FileIcon } from './icons/FileIcon';
 
 interface FileExplorerProps {
     fileSystem: FileSystem;
     onFileSelect: (file: { path: string; content: string }) => void;
+    activeFilePath?: string;
 }
 
 const FileSystemTree: React.FC<{
     node: FileSystem;
     onFileSelect: (file: { path: string; content: string }) => void;
     pathPrefix?: string;
-}> = ({ node, onFileSelect, pathPrefix = '' }) => {
+    activeFilePath?: string;
+}> = ({ node, onFileSelect, pathPrefix = '', activeFilePath }) => {
     const [openFolders, setOpenFolders] = useState<Record<string, boolean>>({'public': true, 'src': true});
 
     const toggleFolder = (name: string) => {
@@ -34,12 +36,16 @@ const FileSystemTree: React.FC<{
                                 <FolderIcon isOpen={!!openFolders[name]} />
                                 <span className="text-text-primary">{name}</span>
                             </div>
-                            {openFolders[name] && <FileSystemTree node={childNode.children} onFileSelect={onFileSelect} pathPrefix={currentPath} />}
+                            {openFolders[name] && <FileSystemTree node={childNode.children} onFileSelect={onFileSelect} pathPrefix={currentPath} activeFilePath={activeFilePath} />}
                         </li>
                     );
                 } else {
                     return (
-                        <li key={currentPath} onClick={() => onFileSelect({ path: currentPath, content: childNode.content })} className="flex items-center gap-2 cursor-pointer py-1 hover:bg-gray-700/50 rounded">
+                        <li 
+                            key={currentPath} 
+                            onClick={() => onFileSelect({ path: currentPath, content: childNode.content })} 
+                            className={`flex items-center gap-2 cursor-pointer py-1 hover:bg-gray-700/50 rounded px-1 ${activeFilePath === currentPath ? 'bg-accent/20' : ''}`}
+                        >
                             <FileIcon />
                             <span className="text-text-secondary">{name}</span>
                         </li>
@@ -51,11 +57,11 @@ const FileSystemTree: React.FC<{
 };
 
 
-export const FileExplorer: React.FC<FileExplorerProps> = ({ fileSystem, onFileSelect }) => {
+export const FileExplorer: React.FC<FileExplorerProps> = ({ fileSystem, onFileSelect, activeFilePath }) => {
     return (
         <div className="p-3 font-mono text-sm">
             <h2 className="text-base font-sans font-semibold text-text-primary mb-2 px-2">File Explorer</h2>
-            <FileSystemTree node={fileSystem} onFileSelect={onFileSelect} />
+            <FileSystemTree node={fileSystem} onFileSelect={onFileSelect} activeFilePath={activeFilePath} />
         </div>
     );
 };

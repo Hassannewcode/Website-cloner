@@ -232,7 +232,7 @@ You will be provided with:
 
 3.  **Frontend Reconstruction:**
     *   If it's NOT an auth wall, proceed to reconstruct the frontend.
-    *   Create a clean, well-structured \`index.html\` file (or a more descriptive name like \`dashboard.html\` if it's a secondary page) and place it in a \`public\` directory.
+    *   Create a clean, well-structured \`index.html\` file (or a more descriptive name like \`dashboard.html\` if it's a secondary page) and place it in a \`public\` directory. Ensure this HTML file correctly links to any CSS and JavaScript files you also create, using relative paths (e.g., \`<link rel="stylesheet" href="/css/style.css">\`).
     *   Separate CSS into files like \`public/css/style.css\`.
     *   Separate JavaScript into files like \`public/js/script.js\`.
     *   **Asset Handling:** For images (\`<img>\`), fonts, and other assets referenced via URL, ensure their \`src\` or \`href\` attributes are absolute URLs pointing to the original source. This ensures they render correctly in the preview. Do not try to create local copies of these binary assets.
@@ -242,9 +242,11 @@ You will be provided with:
     *   Scrutinize the JavaScript code for any API calls (e.g., \`fetch('/api/users')\`, \`axios.post('/api/auth')\`).
     *   Based on these calls, infer the API routes, HTTP methods, and the likely data schemas.
     *   Generate a \`server.js\` file using Node.js and Express at the root level. This server should create mock API endpoints that match your inferences.
+    *   The server should also serve the static files from the \`public\` directory.
     *   For GET requests, return plausible, varied sample data (e.g., an array of 3-5 objects).
     *   For POST/PUT/DELETE requests, simply return a success message.
     *   Generate a \`package.json\` file at the root with necessary dependencies like \`express\` and \`cors\`.
+    *   Generate a \`README.md\` file at the root. It must explain the project structure and provide clear, copy-pasteable terminal commands for a user to install dependencies (\`npm install\`) and run the server (\`node server.js\`).
 
 5.  **Plan Next Step:**
     *   Examine the page for the most logical internal link a user would click to navigate deeper into the application's core functionality (e.g., a "Dashboard" link after login, "View Profile", "Open Project").
@@ -500,7 +502,11 @@ Respond with a single JSON object matching the provided schema. Do not add any e
             <Header onInitiateCloning={handleInitiateCloning} isLoading={cloningState === CloningState.CLONING || cloningState === CloningState.FIXING} />
             <main className="flex-grow grid grid-cols-12 gap-4 p-4 overflow-hidden">
                 <div className="col-span-2 bg-secondary rounded-lg border border-border-color overflow-y-auto">
-                    <FileExplorer fileSystem={fileSystem} onFileSelect={setActiveFile} />
+                    <FileExplorer 
+                        fileSystem={fileSystem} 
+                        onFileSelect={setActiveFile} 
+                        activeFilePath={activeFile?.path}
+                    />
                 </div>
                 <div className="col-span-6 bg-secondary rounded-lg border border-border-color flex flex-col">
                     {activeFile ? <CodeEditor file={activeFile} /> : <PreviewWindow htmlContent={mainHtmlContent} />}
