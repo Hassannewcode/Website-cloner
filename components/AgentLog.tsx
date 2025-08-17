@@ -18,6 +18,8 @@ const getLogTypeColor = (type: LogType): string => {
             return 'text-accent';
         case LogType.DEBUG:
             return 'text-purple-400';
+        case LogType.THOUGHT:
+            return 'text-cyan-400';
         case LogType.INFO:
         default:
             return 'text-text-secondary';
@@ -31,6 +33,7 @@ const getLogTypePrefix = (type: LogType): string => {
         case LogType.ERROR:   return '[ERROR]  ';
         case LogType.SYSTEM:  return '[SYSTEM] ';
         case LogType.DEBUG:   return '[DEBUG]  ';
+        case LogType.THOUGHT: return '[AGENT]  ';
         case LogType.INFO:    return '[INFO]   ';
         default:              return '[LOG]    ';
     }

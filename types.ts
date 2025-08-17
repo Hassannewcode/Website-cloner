@@ -31,6 +31,7 @@ export enum LogType {
     SUCCESS = 'SUCCESS',
     SYSTEM = 'SYSTEM',
     DEBUG = 'DEBUG',
+    THOUGHT = 'THOUGHT',
 }
 
 export interface AgentLogEntry {

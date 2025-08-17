@@ -101,8 +101,13 @@ const App: React.FC = () => {
         current[parts[parts.length - 1]] = { type: 'file', content };
     };
     
-    const handleInitiateCloning = (url: string, useScreenshot: boolean) => {
-        if (!url || ![CloningState.IDLE, CloningState.COMPLETED, CloningState.ERROR].includes(cloningState)) return;
+    const handleInitiateCloning = (rawUrl: string, useScreenshot: boolean) => {
+        if (!rawUrl || ![CloningState.IDLE, CloningState.COMPLETED, CloningState.ERROR].includes(cloningState)) return;
+
+        let url = rawUrl.trim();
+        if (!/^(https?:\/\/)/i.test(url)) {
+            url = `https://${url}`;
+        }
 
         setCloningState(CloningState.CLONING);
         setAgentLogs([]);
@@ -112,12 +117,17 @@ const App: React.FC = () => {
         setVisitedUrls(new Set());
         setConsoleErrors([]);
         setFixAttempts(0);
-        addLog("Initializing Full-Stack Agentic Cloner v5.0...", LogType.SYSTEM);
+        addLog("Initializing Full-Stack Agentic Cloner v5.1...", LogType.SYSTEM);
         
         setUrlToClone(url);
         if (useScreenshot) {
-            window.open(url, '_blank', 'noopener,noreferrer');
-            setIsScreenshotModalOpen(true);
+             try {
+                 window.open(url, '_blank', 'noopener,noreferrer');
+                 setIsScreenshotModalOpen(true);
+            } catch (e) {
+                addLog(`Could not open new tab for URL: ${url}. Please check browser pop-up settings.`, LogType.ERROR);
+                setCloningState(CloningState.ERROR);
+            }
         } else {
             setCloningQueue([{ url }]);
         }
@@ -194,40 +204,55 @@ const App: React.FC = () => {
         const assetsContentString = assets.map(a => `\n\n--- Asset: ${a.path} ---\n\`\`\`\n${a.content}\n\`\`\``).join('');
 
         const prompt = `
-You are a world-class AI developer agent tasked with cloning a web application, including its frontend and a inferred mock backend.
+You are a world-class AI developer agent. Your mission is to clone a web application with high fidelity, creating a complete, runnable project structure including frontend files and a mock backend server.
 
-**Core Task:**
-Your goal is to deconstruct a provided web page into a complete project structure. You will be given the page's main HTML, and the source code of its linked CSS and JavaScript files. You must also infer backend functionality from the frontend code.
+**INPUT:**
+You will be provided with:
+1. The main HTML source of a web page.
+2. The source code of its linked CSS and JavaScript files.
+3. (Optional) A screenshot of the page for visual context.
+4. A list of files that already exist in the project.
 
-**Instructions:**
+**PROCEDURE:**
 
-1.  **Authentication Wall Detection:**
-    *   First, analyze the page to determine if it is a login, signup, or authentication-related page.
+1.  **Analyze & Plan (Thought Process):**
+    *   First, formulate a step-by-step plan for how you will deconstruct the page.
+    *   Consider the overall layout, components (header, footer, sidebar, cards, forms), and functionality.
+    *   Determine a logical file and directory structure (e.g., placing all frontend assets in a \`public\` directory).
+    *   Detail this plan in the \`thoughtProcess\` field of your response.
+
+2.  **Authentication Wall Detection:**
+    *   Analyze the page to determine if it is primarily for login, signup, or authentication.
     *   If it IS an authentication page:
         *   Set \`isAuthWall\` to \`true\`.
-        *   Set \`messageForUser\` to a message like "I've encountered a login page. Please sign in to the application so I can continue."
+        *   Set \`messageForUser\` to a helpful message like "I've encountered a login page. To proceed, please sign in to the application and provide the URL of the page you land on after logging in."
+        *   Set \`thoughtProcess\` to "Detected an authentication wall. Halting file generation and awaiting user action."
         *   Provide an empty \`files\` array and empty \`backendFiles\` array.
         *   Do NOT proceed with any other steps.
 
-2.  **Frontend Reconstruction:**
-    *   If it's NOT an auth wall, analyze all provided source code (HTML, CSS, JS).
-    *   Reconstruct the file system. Use a logical structure (e.g., \`index.html\`, \`css/style.css\`, \`js/script.js\`, \`assets/\`).
-    *   If you are processing a secondary page (e.g., a dashboard), name the HTML file descriptively (e.g., \`dashboard.html\`) and merge shared styles/scripts logically.
-    *   Ensure the generated code is clean, well-formatted, and complete.
+3.  **Frontend Reconstruction:**
+    *   If it's NOT an auth wall, proceed to reconstruct the frontend.
+    *   Create a clean, well-structured \`index.html\` file (or a more descriptive name like \`dashboard.html\` if it's a secondary page) and place it in a \`public\` directory.
+    *   Separate CSS into files like \`public/css/style.css\`.
+    *   Separate JavaScript into files like \`public/js/script.js\`.
+    *   **Asset Handling:** For images (\`<img>\`), fonts, and other assets referenced via URL, ensure their \`src\` or \`href\` attributes are absolute URLs pointing to the original source. This ensures they render correctly in the preview. Do not try to create local copies of these binary assets.
+    *   Merge and refactor the provided code for clarity and good practice.
 
-3.  **Backend Inference & Generation:**
+4.  **Backend Inference & Generation:**
     *   Scrutinize the JavaScript code for any API calls (e.g., \`fetch('/api/users')\`, \`axios.post('/api/auth')\`).
-    *   Based on these calls, infer the API routes, HTTP methods, and the likely data schemas for requests and responses.
-    *   Generate a \`server.js\` file using Node.js and Express. This server should create mock API endpoints that match your inferences. For a GET request, return plausible sample data. For POST/PUT, simply return a success message.
-    *   Generate a \`package.json\` file with necessary dependencies like \`express\` and \`cors\`.
+    *   Based on these calls, infer the API routes, HTTP methods, and the likely data schemas.
+    *   Generate a \`server.js\` file using Node.js and Express at the root level. This server should create mock API endpoints that match your inferences.
+    *   For GET requests, return plausible, varied sample data (e.g., an array of 3-5 objects).
+    *   For POST/PUT/DELETE requests, simply return a success message.
+    *   Generate a \`package.json\` file at the root with necessary dependencies like \`express\` and \`cors\`.
 
-4.  **Plan Next Step:**
-    *   Identify the single most logical internal link a user would click to navigate deeper into the app (e.g., "Dashboard", "View Profile").
-    *   Exclude non-essential links like "Terms of Service" or external sites.
+5.  **Plan Next Step:**
+    *   Examine the page for the most logical internal link a user would click to navigate deeper into the application's core functionality (e.g., a "Dashboard" link after login, "View Profile", "Open Project").
+    *   Exclude non-essential links like "Terms of Service", "Privacy Policy", "Sign Out", or external sites.
     *   Provide the full, absolute URL for this link in the \`nextPageUrl\` field. If no such link exists, set it to \`null\`.
 
-**Output:**
-Respond with a single JSON object matching the provided schema. Do not add any explanatory text outside the JSON structure.`;
+**OUTPUT SCHEMA:**
+Respond with a single JSON object matching the provided schema. Do not add any explanatory text, comments, or markdown formatting outside the JSON structure.`;
         
         const existingFiles = Object.keys(currentFileSystem);
         const textPart = { text: `Prompt: ${prompt}\n\nExisting Files: [${existingFiles.join(', ')}]\n\nHTML Content for ${url}:\n\`\`\`html\n${htmlContent}\n\`\`\`` + assetsContentString };
@@ -241,6 +266,7 @@ Respond with a single JSON object matching the provided schema. Do not add any e
                 responseSchema: {
                     type: Type.OBJECT,
                     properties: {
+                        thoughtProcess: { type: Type.STRING, description: "The agent's step-by-step plan for cloning the page." },
                         isAuthWall: { type: Type.BOOLEAN },
                         messageForUser: { type: Type.STRING },
                         files: {
@@ -261,13 +287,17 @@ Respond with a single JSON object matching the provided schema. Do not add any e
                         },
                         nextPageUrl: { type: Type.STRING, description: "Full URL of the next page. Set to null or omit." }
                     },
-                    required: ["isAuthWall", "messageForUser", "files", "backendFiles"],
+                    required: ["thoughtProcess", "isAuthWall", "messageForUser", "files", "backendFiles"],
                 },
             },
         });
         
         addLog("AI analysis complete. Processing results.", LogType.SUCCESS);
         const result = JSON.parse(response.text);
+
+        if (result.thoughtProcess) {
+            addLog(result.thoughtProcess, LogType.THOUGHT);
+        }
 
         addLog(`AI Agent: "${result.messageForUser}"`, result.isAuthWall ? LogType.WARN : LogType.SYSTEM);
 
