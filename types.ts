@@ -33,6 +33,7 @@ export enum LogType {
     SYSTEM = 'SYSTEM',
     DEBUG = 'DEBUG',
     THOUGHT = 'THOUGHT',
+    NETWORK = 'NETWORK', // For visualization-specific logs
 }
 
 export interface AgentLogEntry {

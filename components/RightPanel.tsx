@@ -2,17 +2,19 @@
 import React, { useState, useEffect } from 'react';
 import { AgentLog } from './AgentLog';
 import { ConsoleLog } from './ConsoleLog';
+import { AgentNetworkGraph } from './AgentNetworkGraph';
 import { AgentLogEntry } from '../types';
 
 interface RightPanelProps {
     logs: AgentLogEntry[];
     consoleErrors: string[];
     isFixing: boolean;
+    urlToClone: string;
 }
 
-type Tab = 'log' | 'console';
+type Tab = 'log' | 'console' | 'network';
 
-export const RightPanel: React.FC<RightPanelProps> = ({ logs, consoleErrors, isFixing }) => {
+export const RightPanel: React.FC<RightPanelProps> = ({ logs, consoleErrors, isFixing, urlToClone }) => {
     const [activeTab, setActiveTab] = useState<Tab>('log');
 
     // Automatically switch to console tab when errors appear
@@ -33,6 +35,12 @@ export const RightPanel: React.FC<RightPanelProps> = ({ logs, consoleErrors, isF
                     Agent Log
                 </button>
                 <button
+                    onClick={() => setActiveTab('network')}
+                    className={`px-4 py-2 text-sm font-sans font-semibold rounded-t-md transition-colors ${activeTab === 'network' ? 'bg-primary text-text-primary' : 'text-text-secondary hover:bg-primary/50'}`}
+                >
+                    Network
+                </button>
+                <button
                     onClick={() => setActiveTab('console')}
                     className={`px-4 py-2 text-sm font-sans font-semibold rounded-t-md flex items-center gap-2 transition-colors ${activeTab === 'console' ? 'bg-primary text-text-primary' : 'text-text-secondary hover:bg-primary/50'}`}
                 >
@@ -49,7 +57,9 @@ export const RightPanel: React.FC<RightPanelProps> = ({ logs, consoleErrors, isF
                 </button>
             </div>
              <div className="flex-grow overflow-hidden bg-primary">
-                {activeTab === 'log' ? <AgentLog logs={logs} /> : <ConsoleLog errors={consoleErrors} />}
+                {activeTab === 'log' && <AgentLog logs={logs} />}
+                {activeTab === 'console' && <ConsoleLog errors={consoleErrors} />}
+                {activeTab === 'network' && <AgentNetworkGraph logs={logs} urlToClone={urlToClone} />}
             </div>
         </div>
     );

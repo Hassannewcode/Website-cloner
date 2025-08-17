@@ -558,6 +558,7 @@ Respond with a single JSON object. Do not add any explanatory text outside the J
                         logs={agentLogs} 
                         consoleErrors={consoleErrors} 
                         isFixing={cloningState === CloningState.FIXING}
+                        urlToClone={urlToClone}
                     />
                 </div>
             </main>
