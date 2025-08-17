@@ -3,6 +3,7 @@ export enum CloningState {
     IDLE = 'IDLE',
     CLONING = 'CLONING',
     AWAITING_USER_INPUT = 'AWAITING_USER_INPUT',
+    QUALITY_CHECK = 'QUALITY_CHECK',
     FIXING = 'FIXING',
     COMPLETED = 'COMPLETED',
     ERROR = 'ERROR',
