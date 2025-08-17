@@ -32,7 +32,7 @@ const FileSystemTree: React.FC<{
                 if (childNode.type === 'folder') {
                     return (
                         <li key={currentPath}>
-                            <div onClick={() => toggleFolder(name)} className="flex items-center gap-2 cursor-pointer py-1 hover:bg-gray-700/50 rounded">
+                            <div onClick={() => toggleFolder(name)} className="flex items-center gap-2 cursor-pointer py-1 hover:bg-primary/50 rounded">
                                 <FolderIcon isOpen={!!openFolders[name]} />
                                 <span className="text-text-primary">{name}</span>
                             </div>
@@ -44,7 +44,7 @@ const FileSystemTree: React.FC<{
                         <li 
                             key={currentPath} 
                             onClick={() => onFileSelect({ path: currentPath, content: childNode.content })} 
-                            className={`flex items-center gap-2 cursor-pointer py-1 hover:bg-gray-700/50 rounded px-1 ${activeFilePath === currentPath ? 'bg-accent/20' : ''}`}
+                            className={`flex items-center gap-2 cursor-pointer py-1 hover:bg-primary/50 rounded px-1 ${activeFilePath === currentPath ? 'bg-accent/20' : ''}`}
                         >
                             <FileIcon />
                             <span className="text-text-secondary">{name}</span>

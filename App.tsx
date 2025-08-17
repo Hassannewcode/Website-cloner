@@ -256,7 +256,8 @@ You will be provided with:
 **OUTPUT SCHEMA:**
 Respond with a single JSON object matching the provided schema. Do not add any explanatory text, comments, or markdown formatting outside the JSON structure.`;
         
-        const existingFiles = Object.keys(currentFileSystem);
+        const existingFiles = getFileSystemAsText(currentFileSystem).map(f => f.split('---')[1].replace(' File: ', '').trim());
+
         const textPart = { text: `Prompt: ${prompt}\n\nExisting Files: [${existingFiles.join(', ')}]\n\nHTML Content for ${url}:\n\`\`\`html\n${htmlContent}\n\`\`\`` + assetsContentString };
         const contents = imagePart ? { parts: [textPart, imagePart] } : textPart.text;
         
